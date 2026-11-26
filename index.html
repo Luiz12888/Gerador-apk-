@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fábrica de Jogos IA</title>
+<style>
+:root{
+  --bg:#15112b; --panel:#201a42; --panel2:#2a2354; --line:#3b3372;
+  --text:#f3efff; --muted:#a79fd6; --accent:#ff5c9d; --accent2:#ffd166; --ok:#59e0a8; --err:#ff7a7a;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:2px solid var(--line);background:var(--panel)}
+header h1{font-size:20px;margin:0;letter-spacing:.3px}
+header h1 span{color:var(--accent)}
+header .sp{flex:1}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:9px 14px;cursor:pointer;font-weight:700}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible,select:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--accent2);outline-offset:2px}
+.btn.main{background:var(--accent);border-color:var(--accent);color:#2a0716}
+.btn.main:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+main{flex:1;display:grid;grid-template-columns:380px 1fr;min-height:0}
+aside{border-right:2px solid var(--line);padding:16px;overflow:auto;display:flex;flex-direction:column;gap:14px;background:var(--bg)}
+label{font-size:13px;color:var(--muted);display:block;margin-bottom:5px}
+textarea,input,select{width:100%;background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:10px}
+textarea{resize:vertical;min-height:120px;line-height:1.4}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--panel);border:2px solid var(--line);border-radius:99px;padding:5px 11px;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--accent2)}
+.status{font-size:13px;color:var(--muted);min-height:18px}
+.status.err{color:var(--err)}.status.ok{color:var(--ok)}
+.bar{height:6px;background:var(--panel);border-radius:9px;overflow:hidden;display:none}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+.hist{display:flex;flex-direction:column;gap:6px}
+.hist button{text-align:left;background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
+.hist button:hover{border-color:var(--accent)}
+.hist small{color:var(--muted);display:block}
+section.stage{display:flex;flex-direction:column;min-width:0;min-height:0}
+.tools{display:flex;gap:8px;padding:10px 14px;border-bottom:2px solid var(--line);flex-wrap:wrap;align-items:center}
+.tools .title{font-weight:700;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%}
+.view{flex:1;position:relative;min-height:0;background:#0d0a1f}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:30px;color:var(--muted)}
+.empty b{display:block;font-size:22px;color:var(--text);margin-bottom:8px}
+pre.code{position:absolute;inset:0;margin:0;padding:14px;overflow:auto;font:12px/1.45 Consolas,monospace;background:#0d0a1f;color:#d6ceff;display:none;white-space:pre}
+dialog{background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:14px;max-width:460px;width:92%;padding:20px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{margin:0 0 10px;font-size:18px}
+dialog{max-height:90vh;overflow:auto}
+.steps{padding-left:20px;margin:14px 0;display:flex;flex-direction:column;gap:14px;font-size:14px;color:var(--muted);line-height:1.45}
+.steps button{display:block;margin-top:7px}
+.steps b{color:var(--text)}
+#apkMsg{color:var(--err);font-size:13px;min-height:16px;margin:0}
+dialog p{color:var(--muted);font-size:14px;line-height:1.5}
+.tabs{display:flex;gap:6px}
+.tabs button{flex:1;background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:9px;cursor:pointer;font-weight:700}
+.tabs button.on{background:var(--accent2);border-color:var(--accent2);color:#2a1a00}
+.pane{display:flex;flex-direction:column;gap:14px}
+@media(max-width:900px),(max-height:560px){
+  html,body{height:auto;min-height:100%}
+  body{display:block}
+  main{display:block}
+  aside{border-right:0;border-bottom:2px solid var(--line);overflow:visible}
+  section.stage{height:92vh;min-height:420px}
+  header{position:sticky;top:0;z-index:5}
+}
+.tabs{flex-wrap:wrap}.tabs button{min-width:110px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Fábrica de <span>Jogos</span> IA</h1>
+  <div class="sp"></div>
+  <button class="btn" id="btnKey">Chave da API</button>
+</header>
+
+<main>
+<aside>
+  <div class="tabs"><button id="tabFree">Sem IA (grátis)</button><button id="tabAI">Com IA</button><button id="tabMine">Meu HTML</button></div>
+  <div id="paneFree" class="pane" style="display:none">
+    <div><label for="fType">Tipo de jogo</label><select id="fType">
+      <option value="runner">Corredor (pular obstáculos)</option><option value="lanes">Corrida (desviar nas faixas)</option>
+      <option value="ship">Nave (atirar nos inimigos)</option><option value="snake">Cobrinha</option><option value="flappy">Voador (passar pelos canos)</option></select></div>
+    <div><label for="fTitle">Nome do jogo</label><input id="fTitle" value="Corredor" maxlength="30"></div>
+    <div class="row"><div><label for="fPl">Personagem (emoji)</label><input id="fPl" value="🏃" maxlength="8"></div>
+    <div><label for="fEn">Inimigo / item (emoji)</label><input id="fEn" value="🌵" maxlength="8"></div></div>
+    <div class="row"><div><label for="fPal">Cenário</label><select id="fPal"><option value="noite">Noite</option><option value="oceano">Oceano</option><option value="porsol">Pôr do sol</option><option value="floresta">Floresta</option><option value="neon">Neon</option><option value="doce">Doce</option></select></div>
+    <div><label for="fLv">Dificuldade</label><select id="fLv"><option value="1">Fácil</option><option value="2" selected>Normal</option><option value="3">Difícil</option></select></div></div>
+    <button class="btn main" id="btnFree">Criar jogo grátis</button>
+    <div class="status">Não precisa de chave nem de internet.</div>
+  </div>
+  <div id="paneMine" class="pane" style="display:none">
+    <div><label for="fFile">Escolha o seu arquivo HTML</label><input id="fFile" type="file" accept=".html,.htm,text/html"></div>
+    <div class="status">O jogo abre ao lado para você testar. Depois é só gerar o APK. Funciona com HTML de um arquivo só (imagens e sons precisam estar dentro dele).</div>
+    <button class="btn main" id="btnMineApk" disabled>Gerar APK deste HTML</button>
+  </div>
+  <div id="paneAI" class="pane">
+  <div>
+    <label for="prompt">Que jogo você quer criar?</label>
+    <textarea id="prompt" placeholder="Ex.: Um jogo de corrida 3D de carros com pista infinita, turbo, sons de motor e ranking de pontos."></textarea>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="row">
+    <div>
+      <label for="model">Modelo de IA</label>
+      <select id="model">
+        <option value="claude-opus-5-5">Opus 5.5 (melhor qualidade)</option>
+        <option value="claude-sonnet-5-5" selected>Sonnet 5.5 (mais rápido)</option>
+      </select>
+    </div>
+    <div>
+      <label for="plat">Plataforma</label>
+      <select id="plat">
+        <option value="celular e computador">Celular + PC</option>
+        <option value="computador (teclado e mouse)">Só PC</option>
+        <option value="celular (toque na tela)">Só celular</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn main" id="btnGen">Criar jogo</button>
+  </div>
+  <div class="bar" id="bar"><i id="barI"></i></div>
+  <div class="status" id="status"></div>
+
+  <div>
+    <label for="tweak">Ajustar o jogo atual</label>
+    <textarea id="tweak" style="min-height:80px" placeholder="Ex.: deixa mais difícil, troca as cores para neon, adiciona música, corrige o bug do pulo..."></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="btnTweak" disabled>Aplicar ajuste</button>
+      <button class="btn" id="btnFix" disabled>Achar e corrigir bugs</button>
+    </div>
+  </div>
+
+  <div>
+    <label>Seus jogos salvos</label>
+    <div class="hist" id="hist"></div>
+  </div>
+</aside>
+
+<section class="stage">
+  <div class="tools">
+    <span class="title" id="gameTitle">Nenhum jogo ainda</span>
+    <button class="btn" id="btnPlay" disabled>Jogar</button>
+    <button class="btn" id="btnCode" disabled>Ver código</button>
+    <button class="btn" id="btnFull" disabled>Tela cheia</button>
+    <button class="btn" id="btnApk" disabled>Gerar APK</button>
+    <button class="btn main" id="btnDl" disabled>Baixar .html</button>
+  </div>
+  <div class="view">
+    <div class="empty" id="empty"><div><b>Descreva e eu construo.</b>Qualquer gênero: plataforma, corrida, puzzle, tiro, cartas, tabuleiro, RPG, simulador…<br>Depois peça ajustes quantas vezes quiser.</div></div>
+    <iframe id="frame" title="Jogo" sandbox="allow-scripts allow-pointer-lock allow-modals allow-forms" allow="fullscreen; autoplay; gamepad" hidden></iframe>
+    <pre class="code" id="code"></pre>
+  </div>
+</section>
+</main>
+
+<dialog id="dlgKey">
+  <h2>Sua chave da API da Anthropic</h2>
+  <p>A IA que cria os jogos roda pela API da Anthropic. Cole sua chave (começa com <b>sk-ant-</b>), que você cria em console.anthropic.com. Ela fica salva só neste navegador e é enviada apenas para a Anthropic.</p>
+  <input id="keyInput" type="password" placeholder="sk-ant-..." autocomplete="off">
+  <div class="row" style="margin-top:12px">
+    <button class="btn" id="keyCancel">Cancelar</button>
+    <button class="btn main" id="keySave">Salvar</button>
+  </div>
+</dialog>
+
+<dialog id="dlgApk">
+  <h2>Gerar APK pelo GitHub</h2>
+  <label for="apkName">Nome do app no celular</label>
+  <input id="apkName" maxlength="30">
+  <ol class="steps">
+    <li><b>Baixe o jogo.</b><button class="btn" id="s1">Baixar index.html</button></li>
+    <li><b>Crie um repositório</b> no GitHub (entre na sua conta). Dê um nome, deixe marcado <b>Add a README file</b> e toque em Create repository.<button class="btn" id="s2">Abrir GitHub</button></li>
+    <li><label for="ghRepo">Escreva aqui seu usuário e o nome do repositório</label><input id="ghRepo" placeholder="usuario/nome-do-repositorio"></li>
+    <li><b>Envie o jogo.</b> Na página que abrir, toque em “choose your files”, escolha o index.html e toque em Commit changes.<button class="btn" id="s3">Abrir página de upload</button></li>
+    <li><b>Crie o gerador de APK.</b> Já vem tudo preenchido, é só tocar em Commit changes e confirmar.<button class="btn" id="s4">Criar gerador de APK</button></li>
+    <li><b>Espere uns 8 minutos</b>, abra a execução com ✓ verde e baixe <b>jogo-apk</b> em Artifacts. Descompacte o zip: dentro está o app-debug.apk para instalar.<button class="btn" id="s5">Abrir Actions</button></li>
+  </ol>
+  <p id="apkMsg"></p>
+  <p>Se alguma página do GitHub vier cortada no celular, ative “Site para computador” no menu do navegador.</p>
+  <button class="btn" id="apkCancel" style="width:100%">Fechar</button>
+</dialog>
+
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+// Se quiser, cole a sua chave da API entre as aspas abaixo para o app usar sempre.
+// Atenção: quem receber este arquivo poderá ver e usar a chave.
+const CHAVE_EMBUTIDA="";
+const LS = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v }catch(e){ return d } },
+  set(k,v){ try{ localStorage.setItem(k,v) }catch(e){} }
+};
+
+const SYSTEM = `Você é um engenheiro sênior de jogos e designer de games. Sua tarefa: criar jogos COMPLETOS, jogáveis, bonitos e sem bugs, em UM ÚNICO arquivo HTML.
+
+REGRAS TÉCNICAS (obrigatórias):
+- Responda SOMENTE com o código HTML completo (de <!DOCTYPE html> até </html>), sem explicações, sem markdown.
+- Um único arquivo: HTML + CSS + JavaScript inline. Nenhuma biblioteca, imagem, fonte ou áudio externo, nenhum fetch. Tudo desenhado por código (Canvas 2D, WebGL puro ou CSS/SVG) e sons gerados com Web Audio API.
+- O jogo roda dentro de um iframe: use localStorage apenas dentro de try/catch (pode estar bloqueado) e tenha fallback em memória.
+- Layout responsivo que ocupa 100% da janela, redimensiona corretamente (resize, devicePixelRatio) e nunca gera barras de rolagem.
+- Controles: teclado e mouse no PC; toque na tela (botões virtuais ou arrastar) no celular. Impeça zoom/scroll por toque (touch-action:none). Respeite a plataforma pedida.
+- Loop de jogo com requestAnimationFrame e delta time (limite o dt a 50ms). Áudio só começa após a primeira interação do usuário.
+
+REGRAS DE QUALIDADE:
+- Tela inicial com título e botão Jogar, instruções curtas, pausa (tecla P/Esc e botão), tela de Game Over com pontuação, recorde e botão Jogar de novo.
+- Game feel: partículas, tremor de tela, animações suaves, feedback sonoro em cada ação, música ou ambiente simples gerado por código, dificuldade que cresce de forma justa.
+- Visual coeso e caprichado: paleta pensada, sombras, brilhos, nada de retângulos cinzas sem graça.
+- Se for pedido multiplayer online, entregue um modo local (mesma tela) ou contra bot totalmente funcional e explique na própria tela inicial que online exige servidor; nunca finja funcionalidade que não existe.
+- Todo texto do jogo em português do Brasil, a menos que o usuário peça outro idioma.
+- Antes de responder, revise mentalmente o código: variáveis não definidas, colisões, estados travados, eventos duplicados, fim de jogo e reinício. Entregue código que funciona de primeira.
+- Cumpra TUDO que o usuário pediu, inclusive detalhes. Se o pedido for vago, escolha as melhores decisões de design por conta própria.
+- Em ajustes: mantenha tudo que já funciona e devolva o arquivo COMPLETO atualizado.
+- Não crie conteúdo ofensivo, que copie personagens ou marcas protegidas de forma direta, nem jogos de azar com dinheiro real.`;
+
+const IDEAS = [
+  ["Corrida 3D","Jogo de corrida 3D em pista infinita com curvas, turbo, tráfego, sons de motor e ranking de pontos."],
+  ["Plataforma","Jogo de plataforma 2D com 5 fases, inimigos, moedas, chefe final e checkpoints."],
+  ["Tiro espacial","Shoot'em up espacial com ondas de inimigos, chefes, power-ups e trilha sonora."],
+  ["Quebra-cabeça","Puzzle viciante com mecânica nova, 30 níveis progressivos e sistema de estrelas."],
+  ["Sobrevivência","Sobrevivência top-down com hordas de zumbis, armas, upgrades e dia/noite."],
+  ["Cartas","Jogo de cartas contra bot com regras claras, animações e placar."],
+  ["Tabuleiro","Jogo de tabuleiro estratégico contra bot com 3 níveis de dificuldade."],
+  ["Clicker","Jogo clicker/idle com melhorias, conquistas e prestígio."]
+];
+
+let history = [];          // mensagens da conversa atual
+let currentHtml = "";
+let currentTitle = "";
+let saved = [];
+try{ saved = JSON.parse(LS.get("fj_saved","[]")) || [] }catch(e){ saved = [] }
+
+// chips de ideias
+IDEAS.forEach(([n,t])=>{
+  const b=document.createElement("button"); b.className="chip"; b.textContent=n;
+  b.onclick=()=>{ $("prompt").value=t; $("prompt").focus(); };
+  $("chips").appendChild(b);
+});
+
+// chave
+const dlg=$("dlgKey");
+$("btnKey").onclick=()=>{ $("keyInput").value=LS.get("fj_key",""); dlg.showModal(); };
+$("keyCancel").onclick=()=>dlg.close();
+$("keySave").onclick=()=>{ LS.set("fj_key",$("keyInput").value.trim()); dlg.close(); setStatus("Chave salva.","ok"); };
+$("model").value = LS.get("fj_model","claude-sonnet-5-5");
+$("model").onchange=()=>LS.set("fj_model",$("model").value);
+
+function setStatus(t,c){ const s=$("status"); s.textContent=t; s.className="status "+(c||""); }
+function setBar(p){ $("bar").style.display=p===null?"none":"block"; if(p!==null) $("barI").style.width=p+"%"; }
+
+function extractHtml(t){
+  const m = t.match(/```(?:html)?\s*([\s\S]*?)```/i);
+  if(m && /<html|<!doctype/i.test(m[1])) return m[1].trim();
+  const i = t.search(/<!doctype html|<html/i);
+  if(i>=0){ let out=t.slice(i); const e=out.lastIndexOf("</html>"); if(e>=0) out=out.slice(0,e+7); return out.trim(); }
+  return t.trim();
+}
+function titleOf(html,fallback){
+  const m=html.match(/<title>([^<]*)<\/title>/i);
+  return (m&&m[1].trim())||fallback.slice(0,40)||"Meu jogo";
+}
+
+function showGame(html,title){
+  currentHtml=html; currentTitle=title;
+  $("frame").hidden=false; $("empty").style.display="none";
+  $("frame").srcdoc=html;
+  $("code").textContent=html;
+  $("gameTitle").textContent=title;
+  ["btnPlay","btnCode","btnFull","btnDl","btnApk","btnTweak","btnFix"].forEach(i=>$(i).disabled=false);
+  showTab("play");
+}
+function showTab(t){
+  $("frame").style.display = t==="play"?"block":"none";
+  $("code").style.display = t==="code"?"block":"none";
+}
+$("btnPlay").onclick=()=>showTab("play");
+$("btnCode").onclick=()=>showTab("code");
+$("btnFull").onclick=()=>{ const f=$("frame"); (f.requestFullscreen||f.webkitRequestFullscreen||function(){}).call(f); };
+$("btnDl").onclick=()=>{
+  const blob=new Blob([currentHtml],{type:"text/html"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=(currentTitle||"jogo").replace(/[^\w\-]+/g,"_")+".html";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+
+function renderHist(){
+  const h=$("hist"); h.innerHTML="";
+  if(!saved.length){ h.innerHTML='<small style="color:var(--muted)">Os jogos que você criar ficam salvos aqui.</small>'; return; }
+  saved.slice().reverse().forEach(g=>{
+    const b=document.createElement("button");
+    b.innerHTML="<b></b><small></small>";
+    b.firstChild.textContent=g.title;
+    b.lastChild.textContent=new Date(g.date).toLocaleString("pt-BR");
+    b.onclick=()=>{
+      history=[{role:"user",content:g.prompt},{role:"assistant",content:g.html}];
+      showGame(g.html,g.title); setStatus("Jogo carregado. Você pode pedir ajustes.","ok");
+    };
+    h.appendChild(b);
+  });
+}
+function persist(prompt){
+  const idx=saved.findIndex(s=>s.id===window.__gid);
+  const item={id:window.__gid,title:currentTitle,prompt:prompt,html:currentHtml,date:Date.now()};
+  if(idx>=0) saved[idx]=item; else saved.push(item);
+  while(JSON.stringify(saved).length>4500000 && saved.length>1) saved.shift();
+  LS.set("fj_saved",JSON.stringify(saved));
+  renderHist();
+}
+
+let busy=false;
+async function callAI(messages,label){
+  const key=LS.get("fj_key","")||CHAVE_EMBUTIDA;
+  if(!key){ dlg.showModal(); setStatus("Cole sua chave da API para começar.","err"); return null; }
+  if(busy) return null;
+  busy=true; ["btnGen","btnTweak","btnFix"].forEach(i=>$(i).disabled=true);
+  setStatus(label,""); setBar(3);
+  let full="";
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key":key,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body:JSON.stringify({model:$("model").value,max_tokens:32000,stream:true,system:SYSTEM,messages})
+    });
+    if(!res.ok){
+      let msg="Erro "+res.status;
+      try{ const j=await res.json(); msg+=": "+(j.error&&j.error.message||""); }catch(e){}
+      if(res.status===401) msg="Chave inválida. Confira sua chave da API.";
+      if(res.status===429) msg="Limite de uso atingido. Espere um pouco e tente de novo.";
+      throw new Error(msg);
+    }
+    const rd=res.body.getReader(), dec=new TextDecoder();
+    let buf="";
+    while(true){
+      const {done,value}=await rd.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let nl;
+      while((nl=buf.indexOf("\n"))>=0){
+        const line=buf.slice(0,nl).trim(); buf=buf.slice(nl+1);
+        if(!line.startsWith("data:")) continue;
+        const d=line.slice(5).trim(); if(!d||d==="[DONE]") continue;
+        try{
+          const ev=JSON.parse(d);
+          if(ev.type==="content_block_delta"&&ev.delta&&ev.delta.text){
+            full+=ev.delta.text;
+            setBar(Math.min(95,3+full.length/400));
+            $("status").textContent=label+" ("+Math.round(full.length/1000)+" mil caracteres)";
+          }else if(ev.type==="error"){ throw new Error(ev.error&&ev.error.message||"Erro da API"); }
+        }catch(e){ if(e.message && !/JSON/.test(e.message)) throw e; }
+      }
+    }
+    setBar(100);
+    return full;
+  }catch(e){
+    let m=e.message||String(e);
+    if(/Failed to fetch|NetworkError/i.test(m)) m="Sem conexão com a API. Verifique a internet.";
+    setStatus(m,"err"); setBar(null);
+    return null;
+  }finally{
+    busy=false; $("btnGen").disabled=false;
+    if(currentHtml){ $("btnTweak").disabled=false; $("btnFix").disabled=false; }
+  }
+}
+
+async function finish(out,promptForSave,msgs){
+  if(out===null) return;
+  const html=extractHtml(out);
+  if(!/<html|<!doctype/i.test(html)||html.length<300){ setStatus("A IA não devolveu um jogo válido. Tente de novo.","err"); setBar(null); return; }
+  history=msgs.concat([{role:"assistant",content:html}]);
+  showGame(html,titleOf(html,promptForSave));
+  persist(promptForSave);
+  setStatus("Pronto! Jogue ao lado ou peça ajustes.","ok");
+  setTimeout(()=>setBar(null),800);
+}
+
+$("btnGen").onclick=async()=>{
+  const p=$("prompt").value.trim();
+  if(!p){ setStatus("Descreva o jogo que você quer.","err"); return; }
+  window.__gid="g"+Date.now();
+  const msgs=[{role:"user",content:"Crie este jogo para "+$("plat").value+":\n\n"+p}];
+  const out=await callAI(msgs,"Criando seu jogo…");
+  await finish(out,p,msgs);
+};
+async function refine(text,label){
+  if(!currentHtml) return;
+  const msgs=history.concat([{role:"user",content:text}]);
+  const out=await callAI(msgs,label);
+  await finish(out,(saved.find(s=>s.id===window.__gid)||{}).prompt||$("prompt").value,msgs);
+}
+$("btnTweak").onclick=()=>{
+  const t=$("tweak").value.trim();
+  if(!t){ setStatus("Escreva o ajuste que você quer.","err"); return; }
+  $("tweak").value="";
+  refine("Faça este ajuste no jogo e devolva o arquivo HTML COMPLETO atualizado:\n\n"+t,"Aplicando ajuste…");
+};
+$("btnFix").onclick=()=>refine("Revise o jogo linha por linha procurando bugs (variáveis indefinidas, colisões erradas, travamentos, controles que não respondem, reinício quebrado, problemas no celular). Corrija tudo e devolva o arquivo HTML COMPLETO.","Procurando e corrigindo bugs…");
+
+/* ===== MODO SEM IA: motor + modelos de jogo (texto copiado para dentro do jogo gerado) ===== */
+function CORE(){
+  const C=document.getElementById("c"),X=C.getContext("2d");
+  let W=0,H=0,state="menu",score=0,best=0,overT=0,AC=null,last=0;
+  try{best=+localStorage.getItem(KEY)||0}catch(e){}
+  const D=[0,.8,1,1.3][P.lv];
+  const keys={},ptr={x:0,y:0,down:false};
+  function rs(){const d=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;C.width=W*d;C.height=H*d;C.style.width=W+"px";C.style.height=H+"px";X.setTransform(d,0,0,d,0,0)}
+  window.addEventListener("resize",rs);rs();
+  function snd(f,d,t){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type=t||"square";o.frequency.value=f;g.gain.value=.07;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.stop(AC.currentTime+d)}catch(e){}}
+  function emo(s,x,y,sz){X.font=Math.round(sz)+"px serif";X.textAlign="center";X.textBaseline="middle";X.fillStyle="#fff";X.fillText(s,x,y)}
+  function start(){if(state==="over"&&Date.now()-overT<500)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();AC.resume&&AC.resume()}catch(e){}score=0;state="play";G.init()}
+  function over(){if(state!=="play")return;state="over";overT=Date.now();snd(120,.5,"sawtooth");if(score>best){best=score;try{localStorage.setItem(KEY,String(best))}catch(e){}}}
+  const nk=e=>e.key.length===1?e.key.toLowerCase():e.key;
+  window.addEventListener("keydown",e=>{const k=nk(e);keys[k]=1;if(k===" "||k.indexOf("Arrow")===0)e.preventDefault();if(state!=="play")start();else if(G.key)G.key(k)});
+  window.addEventListener("keyup",e=>{keys[nk(e)]=0});
+  C.addEventListener("pointerdown",e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.down=true;if(state!=="play")start();else if(G.tap)G.tap(ptr.x,ptr.y)});
+  window.addEventListener("pointermove",e=>{ptr.x=e.clientX;ptr.y=e.clientY});
+  window.addEventListener("pointerup",()=>{ptr.down=false});
+  window.addEventListener("pointercancel",()=>{ptr.down=false});
+  function overlay(){
+    const m=Math.min(W,H);X.fillStyle="rgba(0,0,0,.55)";X.fillRect(0,0,W,H);
+    emo(P.pl,W/2,H*.2,m*.2);
+    X.fillStyle="#fff";X.textAlign="center";X.textBaseline="middle";
+    X.font="bold "+Math.round(Math.min(W*.1,m*.11,64))+"px sans-serif";
+    X.fillText(state==="over"?(G.endText||"Fim de jogo"):P.title,W/2,H*.36,W*.9);
+    X.font=Math.round(Math.min(W*.05,26))+"px sans-serif";
+    let y=H*.45;
+    if(state==="over"){X.fillText("Pontos: "+score,W/2,y);y+=H*.06}
+    X.fillText("Recorde: "+best,W/2,y);
+    const bw=Math.min(W*.6,260),bh=56,by=H*.6;
+    X.fillStyle="#ffd166";X.fillRect(W/2-bw/2,by,bw,bh);
+    X.fillStyle="#2a1a00";X.font="bold 24px sans-serif";X.fillText(state==="over"?"JOGAR DE NOVO":"JOGAR",W/2,by+bh/2,bw*.9);
+    X.fillStyle="rgba(255,255,255,.85)";X.font=Math.round(Math.min(W*.04,17))+"px sans-serif";X.fillText(G.help||"",W/2,by+bh+34,W*.92);
+  }
+  function loop(t){
+    const dt=Math.min(.05,(t-last)/1000||0);last=t;
+    const g=X.createLinearGradient(0,0,0,H);g.addColorStop(0,P.c1);g.addColorStop(1,P.c2);X.fillStyle=g;X.fillRect(0,0,W,H);
+    if(state==="play")G.update(dt);
+    if(state!=="menu"){
+      G.draw();
+      X.fillStyle="#fff";X.font="bold 20px sans-serif";X.textBaseline="top";
+      X.textAlign="left";X.fillText("Pontos: "+score,16,14);X.textAlign="right";X.fillText("Recorde: "+best,W-16,14);
+    }
+    if(state!=="play")overlay();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+const GAMES={
+runner:function(){
+  let y,vy,o,t,sc;
+  const jump=()=>{if(y<=0){vy=H*1.1;snd(520,.12)}},sz=()=>Math.min(W,H)*.1;
+  return{help:"Toque, clique ou aperte espaço para pular",
+   init(){y=0;vy=0;o=[];t=1;sc=0},
+   tap:jump,key(k){if(k===" "||k==="ArrowUp"||k==="w")jump()},
+   update(dt){const B=Math.max(W,600),s=Math.min(B*1.1,B*.5+sc*1.5)*D;
+     vy-=H*2.6*dt;y+=vy*dt;if(y<0){y=0;vy=0}
+     t-=dt;if(t<0){o.push({x:W+sz()});t=1.2+Math.random()-Math.min(.2,sc/1000)}
+     o.forEach(a=>a.x-=s*dt);o=o.filter(a=>a.x>-sz()*2);
+     sc+=dt*10;score=Math.floor(sc);
+     for(const a of o)if(Math.hypot(a.x-W*.2,y)<sz()*.7)over()},
+   draw(){const gy=H*.78,z=sz();X.fillStyle="rgba(0,0,0,.35)";X.fillRect(0,gy,W,H-gy);
+     X.fillStyle="rgba(255,255,255,.25)";for(let i=0;i<W/60+2;i++)X.fillRect(i*60-(sc*40)%60,gy+14,30,4);
+     o.forEach(a=>emo(P.en,a.x,gy-z/2,z*1.2));emo(P.pl,W*.2,gy-y-z/2,z*1.2)}}
+},
+lanes:function(){
+  let lane,px,it,t,sc,off;
+  const rw=()=>Math.min(W*.92,Math.max(300,H*.6)),lx=l=>W/2+(l-1)*rw()/3,sz=()=>Math.min(W,H)*.1;
+  const mv=d=>{lane=Math.max(0,Math.min(2,lane+d));snd(400,.05)};
+  return{help:"Setas / A-D ou toque nos lados para trocar de faixa",
+   init(){lane=1;px=W/2;it=[];t=.5;sc=0;off=0},
+   tap(x){mv(x<W/2?-1:1)},
+   key(k){if(k==="ArrowLeft"||k==="a")mv(-1);if(k==="ArrowRight"||k==="d")mv(1)},
+   update(dt){const s=(H*.5+sc*1.2)*D,py=H*.82;
+     px+=(lx(lane)-px)*Math.min(1,dt*14);off=(off+s*dt)%80;
+     t-=dt;if(t<0){it.push({l:Math.floor(Math.random()*3),y:-60,star:Math.random()<.25});t=Math.max(.35,.9-sc/400)*(.7+Math.random()*.6)}
+     it.forEach(a=>a.y+=s*dt);
+     for(const a of it)if(a.l===lane&&Math.abs(a.y-py)<sz()*.8){if(a.star){sc+=30;a.dead=1;snd(900,.1)}else over()}
+     it=it.filter(a=>!a.dead&&a.y<H+60);sc+=dt*8;score=Math.floor(sc)},
+   draw(){const w=rw();X.fillStyle="rgba(0,0,0,.45)";X.fillRect(W/2-w/2,0,w,H);
+     X.fillStyle="rgba(255,255,255,.5)";for(let l=1;l<3;l++)for(let y=off-80;y<H;y+=80)X.fillRect(W/2-w/2+l*w/3-3,y,6,40);
+     it.forEach(a=>emo(a.star?"⭐":P.en,lx(a.l),a.y,sz()*1.2));emo(P.pl,px,H*.82,sz()*1.3)}}
+},
+ship:function(){
+  let x,b,e,t,ft,lives,sc;
+  const sz=()=>Math.min(W,H)*.09;
+  return{help:"Arraste (ou segure o clique) ou use as setas. O tiro é automático",
+   init(){x=W/2;b=[];e=[];t=1;ft=0;lives=3;sc=0},
+   update(dt){const z=sz(),py=H*.85;
+     if(ptr.down)x+=(ptr.x-x)*Math.min(1,dt*12);
+     if(keys.ArrowLeft||keys.a)x-=W*.8*dt;if(keys.ArrowRight||keys.d)x+=W*.8*dt;
+     x=Math.max(z/2,Math.min(W-z/2,x));
+     ft-=dt;if(ft<0){b.push({x:x,y:py-z});ft=.22;snd(800,.05)}
+     t-=dt;if(t<0){e.push({x:z+Math.random()*(W-z*2),y:-z,v:(H*.18+Math.random()*H*.1+sc*.8)*D,hp:sc>150&&Math.random()<.3?3:1});t=Math.max(.35,1.1-sc/300)/D}
+     b.forEach(q=>q.y-=H*1.1*dt);e.forEach(a=>a.y+=a.v*dt);
+     for(const a of e)for(const q of b)if(!q.d&&!a.d&&Math.hypot(a.x-q.x,a.y-q.y)<z*.6){q.d=1;a.hp--;if(a.hp<=0){a.d=1;sc+=10;snd(200,.12,"sawtooth")}}
+     for(const a of e){if(a.d)continue;if(Math.hypot(a.x-x,a.y-py)<z*.8){a.d=1;lives--;snd(90,.3,"sawtooth")}else if(a.y>H+z){a.d=1;lives--}}
+     if(lives<=0)over();
+     b=b.filter(q=>!q.d&&q.y>-20);e=e.filter(a=>!a.d);score=sc},
+   draw(){const z=sz();X.fillStyle="#fff";b.forEach(q=>X.fillRect(q.x-2,q.y-8,4,16));
+     e.forEach(a=>emo(P.en,a.x,a.y,z*(a.hp>1?1.7:1.2)));emo(P.pl,x,H*.85,z*1.3);
+     for(let i=0;i<lives;i++)emo("❤️",26+i*30,60,22)}}
+},
+snake:function(){
+  const N=18;let body,dir,nd,food,acc,eat,sx=null,sy=0;
+  const cs=()=>Math.floor(Math.min(W,H-70)/N);
+  const place=()=>{do{food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)}}while(body.some(q=>q.x===food.x&&q.y===food.y))};
+  const turn=(dx,dy)=>{if(dx===-dir.x&&dy===-dir.y)return;nd={x:dx,y:dy}};
+  window.addEventListener("pointerdown",e=>{sx=e.clientX;sy=e.clientY});
+  window.addEventListener("pointerup",e=>{if(state!=="play"||sx===null)return;const dx=e.clientX-sx,dy=e.clientY-sy;sx=null;if(Math.max(Math.abs(dx),Math.abs(dy))<20)return;if(Math.abs(dx)>Math.abs(dy))turn(dx>0?1:-1,0);else turn(0,dy>0?1:-1)});
+  return{help:"Setas / WASD ou arraste o dedo para mudar de direção",
+   init(){body=[{x:9,y:9},{x:8,y:9},{x:7,y:9}];dir={x:1,y:0};nd=dir;acc=0;eat=0;place()},
+   key(k){const m={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]}[k];if(m)turn(m[0],m[1])},
+   update(dt){acc+=dt;const step=Math.max(.06,.2/D-eat*.003);if(acc<step)return;acc-=step;dir=nd;
+     const h={x:body[0].x+dir.x,y:body[0].y+dir.y};
+     if(h.x<0||h.y<0||h.x>=N||h.y>=N||body.some(q=>q.x===h.x&&q.y===h.y)){over();return}
+     body.unshift(h);if(h.x===food.x&&h.y===food.y){eat++;score=eat*10;snd(700,.08);place()}else body.pop()},
+   draw(){const c=cs(),ox=(W-N*c)/2,oy=(H-N*c)/2+24;X.fillStyle="rgba(0,0,0,.35)";X.fillRect(ox,oy,N*c,N*c);
+     X.fillStyle="rgba(255,255,255,.75)";body.forEach((q,i)=>{if(i)X.fillRect(ox+q.x*c+1,oy+q.y*c+1,c-2,c-2)});
+     emo(P.pl,ox+body[0].x*c+c/2,oy+body[0].y*c+c/2,c*1.2);emo(P.en,ox+food.x*c+c/2,oy+food.y*c+c/2,c)}}
+},
+flappy:function(){
+  let y,vy,p,t,sc;
+  const flap=()=>{vy=-H*.62;snd(600,.08)},gap=()=>H*[0,.36,.3,.25][P.lv],sz=()=>Math.min(W,H)*.08;
+  return{help:"Toque, clique ou espaço para bater as asas",
+   init(){y=H/2;vy=0;p=[];t=0;sc=0},
+   tap:flap,key(k){if(k===" "||k==="ArrowUp"||k==="w")flap()},
+   update(dt){const z=sz(),pw=z*1.5,s=Math.max(200,W*.3);
+     vy+=H*1.9*dt;y+=vy*dt;t-=dt;
+     if(t<=0){p.push({x:W+pw,g:H*.2+Math.random()*(H*.6-gap()),d:0});t=1.7}
+     p.forEach(a=>a.x-=s*dt);
+     for(const a of p){if(!a.d&&a.x+pw/2<W*.25){a.d=1;sc++;score=sc;snd(900,.07)}
+       if(Math.abs(a.x-W*.25)<pw/2+z*.35&&(y-z*.35<a.g||y+z*.35>a.g+gap()))over()}
+     p=p.filter(a=>a.x>-pw*2);if(y>H-z*.4||y<-z)over()},
+   draw(){const z=sz(),pw=z*1.5,g=gap();X.fillStyle="rgba(255,255,255,.8)";
+     p.forEach(a=>{X.fillRect(a.x-pw/2,0,pw,a.g);X.fillRect(a.x-pw/2,a.g+g,pw,H);emo(P.en,a.x,a.g-pw*.4,pw);emo(P.en,a.x,a.g+g+pw*.4,pw)});
+     emo(P.pl,W*.25,y,z*1.3)}}
+}
+};
+
+const DEF={runner:["🏃","🌵","Corredor"],lanes:["🏎️","🚧","Corrida Maluca"],ship:["🚀","👾","Guerra Espacial"],snake:["🐍","🍎","Cobrinha"],flappy:["🐦","🌵","Voador"]};
+const PAL={noite:["#1b1464","#0b0830"],oceano:["#0f6fb5","#06284d"],porsol:["#ff7a59","#5b1f6b"],floresta:["#2f9e5b","#0e3b2a"],neon:["#2b0a4d","#0a0a1f"],doce:["#ff9ac8","#a06bff"]};
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const strip=f=>{const s=f.toString();return s.slice(s.indexOf("{")+1,s.lastIndexOf("}"))};
+
+$("fType").onchange=()=>{const d=DEF[$("fType").value];$("fPl").value=d[0];$("fEn").value=d[1];$("fTitle").value=d[2]};
+$("btnFree").onclick=()=>{
+  const type=$("fType").value,pal=PAL[$("fPal").value],d=DEF[type];
+  const P={title:$("fTitle").value.trim()||d[2],pl:$("fPl").value.trim()||d[0],en:$("fEn").value.trim()||d[1],c1:pal[0],c2:pal[1],lv:+$("fLv").value};
+  const js="(function(){const P="+JSON.stringify(P).replace(/</g,"\\u003c")+";const KEY="+JSON.stringify("fj_"+type+"_"+P.title)+";"+strip(CORE)+"\nconst G=("+GAMES[type].toString()+")();})();";
+  const html='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>'+esc(P.title)+'</title><style>html,body{margin:0;height:100%;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}canvas{display:block}</style></head><body><canvas id="c"></canvas><script>'+js+'<\/script></body></html>';
+  window.__gid="g"+Date.now();
+  history=[{role:"user",content:"Jogo criado sem IA: "+P.title},{role:"assistant",content:html}];
+  showGame(html,P.title);persist("Sem IA: "+P.title);
+  setStatus("Jogo criado sem IA e sem chave.","ok");
+};
+
+function mode(m){
+  ["AI","Free","Mine"].forEach(n=>{const on=n.toLowerCase()===m;$("pane"+n).style.display=on?"flex":"none";$("tab"+n).classList.toggle("on",on)});
+  LS.set("fj_mode",m);
+}
+$("tabAI").onclick=()=>mode("ai");$("tabFree").onclick=()=>mode("free");$("tabMine").onclick=()=>mode("mine");
+$("fFile").onchange=async()=>{
+  const f=$("fFile").files[0];if(!f)return;
+  const t=await f.text();
+  window.__gid="g"+Date.now();
+  history=[{role:"user",content:"Jogo enviado pelo usuário: "+f.name},{role:"assistant",content:t}];
+  showGame(t,titleOf(t,f.name.replace(/\.html?$/i,"")));persist("Meu HTML: "+f.name);
+  $("btnMineApk").disabled=false;setStatus("HTML carregado. Clique em Gerar APK.","ok");
+};
+$("btnMineApk").onclick=()=>$("btnApk").click();
+mode(LS.get("fj_mode",LS.get("fj_key","")?"ai":"free"));
+
+/* ===== APK: gera um projeto .zip que o GitHub transforma em APK ===== */
+function crc32(u){let c,r=-1;if(!crc32.t){crc32.t=[];for(let n=0;n<256;n++){c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;crc32.t[n]=c>>>0}}for(let i=0;i<u.length;i++)r=crc32.t[(r^u[i])&255]^(r>>>8);return(r^-1)>>>0}
+function makeZip(files){
+  const en=new TextEncoder(),parts=[],cd=[];let off=0;
+  files.forEach(f=>{
+    const nm=en.encode(f.name),d=en.encode(f.data),crc=crc32(d);
+    const l=new DataView(new ArrayBuffer(30));l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(12,0x21,true);l.setUint32(14,crc,true);l.setUint32(18,d.length,true);l.setUint32(22,d.length,true);l.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(l.buffer),nm,d);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cd.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+d.length;
+  });
+  let sz=0;cd.forEach(p=>sz+=p.length);
+  const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,sz,true);e.setUint32(16,off,true);
+  return new Blob(parts.concat(cd,[new Uint8Array(e.buffer)]),{type:"application/zip"});
+}
+const WORKFLOW=["name: Gerar APK","on:","  push:","  workflow_dispatch:","jobs:","  build:","    runs-on: ubuntu-latest","    steps:","      - uses: actions/checkout@v4","      - uses: actions/setup-node@v4","        with:","          node-version: 20","      - uses: actions/setup-java@v4","        with:","          distribution: temurin","          java-version: 17","      - run: npm install","      - run: npx cap add android","      - run: npx cap sync android","      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug","      - uses: actions/upload-artifact@v4","        with:","          name: jogo-apk","          path: android/app/build/outputs/apk/debug/app-debug.apk",""].join("\n");
+const README=["COMO TRANSFORMAR ESTE JOGO EM APK (grátis, sem instalar nada no PC)","",
+"1. Crie uma conta em github.com e um repositório novo (pode ser privado).","2. No repositório, clique em Add file > Upload files e arraste TODO o conteúdo desta pasta (www, .github, package.json, capacitor.config.json).",
+"   Se a pasta .github não subir, use Add file > Create new file, digite .github/workflows/apk.yml e cole o conteúdo do arquivo apk.yml deste projeto.",
+"3. Clique em Commit changes. A aba Actions começa a gerar o APK sozinha (uns 5 a 8 minutos).","4. Quando ficar verde, abra a execução e baixe o arquivo jogo-apk em Artifacts.",
+"5. Descompacte: dentro está o app-debug.apk. Envie para o celular e instale (o Android pede para permitir instalar de fontes desconhecidas).","",
+"Observação: o APK sai assinado como debug. Serve para instalar e jogar, mas não para publicar na Play Store."].join("\n");
+$("btnApk").onclick=()=>{$("apkName").value=currentTitle;$("dlgApk").showModal()};
+$("apkCancel").onclick=()=>$("dlgApk").close();
+$("ghRepo").value=LS.get("fj_repo","");
+function workflow(){
+  const nome=($("apkName").value.trim()||"Meu Jogo").replace(/[^A-Za-z0-9 ]/g,"").trim()||"Meu Jogo";
+  const id="com.fabrica.g"+Date.now().toString(36);
+  return ["name: Gerar APK","on:","  push:","  workflow_dispatch:","jobs:","  build:","    runs-on: ubuntu-latest","    steps:",
+   "      - uses: actions/checkout@v4","      - uses: actions/setup-node@v4","        with:","          node-version: 20",
+   "      - uses: actions/setup-java@v4","        with:","          distribution: temurin","          java-version: 17",
+   "      - name: Preparar projeto","        run: |","          mkdir -p www && cp index.html www/index.html","          npm init -y","          npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6",
+   "          npx cap init \""+nome+"\" "+id+" --web-dir www","          npx cap add android","          npx cap sync android",
+   "      - name: Compilar","        run: cd android && chmod +x gradlew && ./gradlew assembleDebug",
+   "      - uses: actions/upload-artifact@v4","        with:","          name: jogo-apk","          path: android/app/build/outputs/apk/debug/app-debug.apk",""].join("\n");
+}
+function repo(){
+  const r=$("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,"");
+  if(!/^[\w.-]+\/[\w.-]+$/.test(r)){$("apkMsg").textContent="Escreva no formato usuario/repositorio (passo 3).";return null}
+  $("apkMsg").textContent="";LS.set("fj_repo",r);return r;
+}
+$("s1").onclick=()=>{
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([currentHtml],{type:"text/html"}));a.download="index.html";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+$("s2").onclick=()=>window.open("https://github.com/new","_blank");
+$("s3").onclick=()=>{const r=repo();if(r)window.open("https://github.com/"+r+"/upload/main","_blank")};
+$("s4").onclick=()=>{const r=repo();if(r)window.open("https://github.com/"+r+"/new/main?filename="+encodeURIComponent(".github/workflows/apk.yml")+"&value="+encodeURIComponent(workflow()),"_blank")};
+$("s5").onclick=()=>{const r=repo();if(r)window.open("https://github.com/"+r+"/actions","_blank")};
+
+renderHist();
+setStatus("Sem chave? Use a aba “Sem IA”.","");
+})();
+</script>
+</body>
+</html>
